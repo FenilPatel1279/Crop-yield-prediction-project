@@ -1,245 +1,206 @@
 import streamlit as st
 import pandas as pd
-import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
+import numpy as np
+from scipy.signal import savgol_filter
+from src.model import CropYieldModel
 
-# --- Page setup ---
-st.set_page_config(page_title="🌾 Crop Yield Prediction Dashboard", layout="wide")
+st.set_page_config(page_title="🇨🇦 Canada Crop Yield Predictor", layout="wide")
 
-# --- Load model ---
-if not os.path.exists("models/crop_yield_model.pkl"):
-    st.error("❌ Model file not found. Please run src/model_train.py first.")
-    st.stop()
+DATA_PATH = "data/processed/canada_final_dataset.csv"
+MODEL_PATH = "models/crop_yield_model.pkl"
 
-model = joblib.load("models/crop_yield_model.pkl")
+df = pd.read_csv(DATA_PATH)
+model = CropYieldModel(model_path=MODEL_PATH)
 
-# --- Load population data ---
-pop_df = pd.read_csv("data/processed/population_processed.csv", encoding="latin1")
-pop_df.columns = pop_df.columns.str.strip().str.lower()
+st.title("🇨🇦 Canada Crop Yield Prediction Dashboard")
+st.write("Predict yield for **Wheat** and **Maize (Corn)** using climate, fertilizer type, and population inputs.")
 
-# --- Title and description ---
-st.title("🌾 Crop Yield Prediction Dashboard — Canada")
-st.markdown("""
-Use this dashboard to simulate how **rainfall**, **temperature**, **fertilizer type**, **crop type**,  
-and **population size** affect Canada's crop yield and national food balance.
-""")
+# =================================================================
+# REALISTIC TEMPERATURE PENALTY
+# =================================================================
+def apply_temperature_penalty(temp, crop):
+    if crop == "wheat":
+        ideal_min, ideal_max = 15, 25
+    else:
+        ideal_min, ideal_max = 18, 30
 
-# --- Sidebar Controls ---
-st.sidebar.header("Input Controls")
+    if temp < -5 or temp > 45:
+        return 0
 
-# Crop Type selection
-crop_type = st.sidebar.selectbox(
-    "🌾 Select Crop Type",
-    ["Wheat", "Corn", "Soybean", "Barley", "Canola"]
-)
+    if ideal_min <= temp <= ideal_max:
+        return 1.0
 
-crop_yield_factors = {
-    "Wheat": 1.0,
-    "Corn": 1.6,
-    "Soybean": 0.6,
-    "Barley": 0.8,
-    "Canola": 0.7
-}
+    if ideal_min - 5 <= temp < ideal_min:
+        return 0.7
+    if ideal_max < temp <= ideal_max + 5:
+        return 0.7
 
-rainfall = st.sidebar.slider("Rainfall (mm)", 0.0, 1000.0, 500.0)
-temperature = st.sidebar.slider("Temperature (°C)", 0.0, 45.0, 20.0)
+    if ideal_min - 10 <= temp < ideal_min - 5:
+        return 0.4
+    if ideal_max + 5 < temp <= ideal_max + 10:
+        return 0.4
 
-# Fertilizer configuration
-st.sidebar.subheader("💧 Fertilizer Configuration")
+    return 0.1
 
+
+# ---------------------------
+# Sidebar Inputs
+# ---------------------------
+st.sidebar.header("Input Settings")
+
+crop_type = st.sidebar.selectbox("Crop Type", ["wheat", "maize"])
+population = st.sidebar.number_input("Population", min_value=1_000_000, max_value=50_000_000, value=38_000_000)
+rainfall = st.sidebar.slider("Rainfall (mm)", 0, 1500, 600)
+temperature = st.sidebar.slider("Temperature (°C)", -10, 40, 20)
+fertilizer = st.sidebar.slider("Fertilizer (kg/ha)", 50, 250, 150)
+
+# Fertilizer Type
 fertilizer_type = st.sidebar.selectbox(
-    "Select Fertilizer Type",
-    ("Organic (Expensive, High Quality - Lower Yield)",
-     "Chemical (Cheaper, High Yield - Lower Quality)",
-     "Mixed (Balanced - Moderate Yield & Quality)")
+    "Fertilizer Type",
+    ["Organic", "Chemical", "Mixed"]
 )
 
-if "Organic" in fertilizer_type:
-    default_fert = 150.0
-    quality_factor = 0.9
-elif "Chemical" in fertilizer_type:
-    default_fert = 200.0
-    quality_factor = 1.2
-else:
-    default_fert = 175.0
-    quality_factor = 1.0
+# Fertilizer multipliers
+fertilizer_factor_dict = {
+    "Organic": 0.9,
+    "Chemical": 1.2,
+    "Mixed": 1.0
+}
+fert_factor = fertilizer_factor_dict[fertilizer_type]  # FIXED NAME
 
-fertilizer = st.sidebar.number_input(
-    "Fertilizer Amount (kg/ha)",
-    min_value=100.0,
-    max_value=250.0,
-    value=default_fert,
-    step=5.0,
-    help="Adjust fertilizer quantity to observe yield impact."
+# Farmland area
+area_ha = st.sidebar.number_input(
+    "Farmland Area (ha)",
+    min_value=1000,
+    max_value=20_000_000,
+    value=10_000_000,
+    step=1000
 )
 
-st.sidebar.caption("💡 Organic = costly but eco-friendly | Chemical = cheap but high yield | Mixed = balanced approach")
+predict_btn = st.sidebar.button("Predict Yield")
 
-# --- Population Input ---
-st.sidebar.subheader("👥 Population Settings")
-population = st.sidebar.number_input(
-    "Enter Population",
-    min_value=1_000_000,
-    max_value=100_000_000,
-    value=38_000_000,
-    step=1_000_000,
-    help="Adjust the population to simulate total demand changes."
-)
+# ---------------------------
+# Prediction
+# ---------------------------
+if predict_btn:
+    pred = model.predict(
+        crop=crop_type,
+        population=population,
+        rainfall=rainfall,
+        temperature=temperature,
+        fertilizer=fertilizer
+    )
 
-# --- Predict Button ---
-if st.sidebar.button("🔮 Predict Crop Yield"):
-
-    # --- Constants ---
-    country = "Canada"
-    avg_demand_per_person = 500.0  # hg/year per person
-    farmland_area = 32_000_000     # Canada’s cultivated farmland area (ha)
-
-    # --- Prepare model input ---
-    X_input = pd.DataFrame({
-        "population": [population],
-        "rainfall": [rainfall],
-        "temperature": [temperature],
-        "fertilizer": [fertilizer]
-    })
-
-    # --- Model Prediction ---
-    pred_yield = model.predict(X_input)[0] * quality_factor
-
-    # --- Apply Realistic Agricultural Rules ---
+    # AGRONOMY RULES
     if rainfall < 50:
-        pred_yield = 0
-    elif temperature < 5 or temperature > 40:
-        pred_yield *= 0.3
-    elif fertilizer < 120:
-        pred_yield *= 0.7
-    elif fertilizer > 220:
-        pred_yield *= 0.8
+        pred = 0
+    else:
+        if rainfall < 200:
+            pred *= 0.4
 
-    # --- Apply crop-specific yield adjustment ---
-    pred_yield *= crop_yield_factors[crop_type]
+        temp_penalty = apply_temperature_penalty(temperature, crop_type)
+        pred *= temp_penalty
 
-    # --- Scale to realistic range ---
-    pred_yield = pred_yield / 10  # ensures yields are in 3–10 tons/ha range
+        if fertilizer < 80:
+            pred *= 0.5
 
-    # --- Compute Totals ---
-    total_production = pred_yield * farmland_area  # hg
-    total_demand = population * avg_demand_per_person
+    # Apply fertilizer factor
+    pred *= fert_factor
 
-    total_production_tons = total_production / 10_000
-    total_demand_tons = total_demand / 10_000
-    difference_tons = abs(total_production_tons - total_demand_tons)
-    status = "Surplus" if total_production_tons > total_demand_tons else "Deficit"
+    pred = max(pred, 0)
 
-    # --- KPI Cards ---
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric(f"🌾 Predicted Yield ({crop_type})", f"{pred_yield:,.2f} hg/ha")
-    col2.metric("🏡 Total Production (metric tons)", f"{total_production_tons:,.0f}")
-    col3.metric("📊 Status", status, delta=f"{difference_tons:,.0f} tons")
-    col4.metric("👥 Population", f"{population:,.0f}")
+    st.subheader("📈 Predicted Yield")
+    st.metric(f"{crop_type.upper()} Yield (hg/ha)", f"{pred:,.2f}")
 
-    # --- Climate & Drought Warnings ---
+    # -----------------------------------------------------------
+    # REALISTIC IMPORT/EXPORT CALCULATION
+    # -----------------------------------------------------------
+    if crop_type == "wheat":
+        need_per_person = 0.067  # tons per person per year
+    else:
+        need_per_person = 0.035
+
+    # Convert yield to tons/ha
+    yield_ton_per_ha = pred / 10_000
+
+    # Total production
+    total_production = yield_ton_per_ha * area_ha
+
+    # National consumption
+    need_tons = population * need_per_person
+
+    difference = total_production - need_tons
+
+    st.write("### 🧮 National Balance Summary")
+    if difference >= 0:
+        st.success(f"✔ Canada can export approx. {difference:,.0f} tons.")
+    else:
+        st.error(f"❌ Canada must import approx. {abs(difference):,.0f} tons.")
+
+    # -----------------------------------------------------------
+    # YEARLY TREND GRAPH
+    # -----------------------------------------------------------
+    st.subheader(f"📊 Yield Trend for {crop_type}")
+
+    crop_df = df[df["crop"] == crop_type]
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    sns.lineplot(data=crop_df, x="year", y="yield_hg_ha", ax=ax)
+    ax.set_title(f"{crop_type.capitalize()} Yield Over Time")
+    ax.set_ylabel("Yield (hg/ha)")
+    ax.grid(True, linestyle="--", alpha=0.5)
+    st.pyplot(fig)
+
+
+# =================================================================
+#  FERTILIZER RESPONSE CURVE
+# =================================================================
+st.subheader("🌾 Yield Response to Fertilizer (Smooth Curve)")
+
+fert_range = np.arange(50, 251, 5)
+wheat_y = []
+maize_y = []
+
+def compute_final_yield(crop, f):
+    y = model.predict(
+        crop=crop,
+        population=population,
+        rainfall=rainfall,
+        temperature=temperature,
+        fertilizer=f
+    )
+
     if rainfall < 50:
-        st.warning("🚱 Drought detected — insufficient rainfall for crops.")
-    elif temperature > 40:
-        st.warning("🔥 Extreme heat — yield will be severely reduced.")
-    elif temperature < 5:
-        st.info("❄️ Low temperature — possible frost affecting crops.")
+        return 0
+    if rainfall < 200:
+        y *= 0.4
 
-    # --- Status Message ---
-    if status == "Surplus":
-        st.success(f"✅ Surplus of {difference_tons:,.0f} tons — Canada can export crops.")
-    else:
-        st.error(f"⚠️ Deficit of {difference_tons:,.0f} tons — increase rainfall, improve soil, or import crops.")
+    y *= apply_temperature_penalty(temperature, crop)
 
-    # --- Export / Import Analysis ---
-    if status == "Surplus":
-        st.info(f"📦 Potential Export Capacity: {difference_tons:,.0f} tons")
-    else:
-        st.warning(f"📦 Required Imports: {difference_tons:,.0f} tons")
+    if f < 80:
+        y *= 0.5
 
-    # --- Explanation ---
-    with st.expander("ℹ️ How the Prediction Works"):
-        st.write("""
-        The model uses **Random Forest Regression**, trained on FAOSTAT yield and Kaggle population data.
-        Realism adjustments ensure physical accuracy:
-        - 🌧️ No rainfall → no yield
-        - 🌡️ Temperature extremes reduce yield 70%
-        - 💩 Fertilizer balance matters
-        - 🌾 Crop-specific yield scaling (e.g., Corn > Wheat > Soybean)
-        - 🔧 Scaled output for realistic tons/ha values
-        """)
+    y *= fert_factor  # FIXED fertilizer factor usage
 
-    # --- Charts ---
-    colA, colB = st.columns(2)
+    return max(y, 0)
 
-    # Chart 1 — Production vs Demand
-    with colA:
-        st.subheader("📊 Production vs Demand Ratio")
-        labels = ["Total Production", "Total Demand"]
-        values = [total_production_tons, total_demand_tons]
-        fig1, ax1 = plt.subplots(figsize=(2.5, 2.5))
-        ax1.pie(values, labels=labels, autopct="%1.1f%%", startangle=90,
-                 colors=["#6ab04c", "#f0932b"], textprops={"fontsize": 8})
-        ax1.axis("equal")
-        st.pyplot(fig1, use_container_width=True)
+for f in fert_range:
+    wheat_y.append(compute_final_yield("wheat", f))
+    maize_y.append(compute_final_yield("maize", f))
 
-    # Chart 2 — Fertilizer Yield Impact
-    with colB:
-        st.subheader("🌿 Fertilizer Yield Impact")
-        fert_types = ["Organic", "Chemical", "Mixed"]
-        fert_factors = [0.9, 1.2, 1.0]
-        fert_values = [pred_yield / quality_factor * f for f in fert_factors]
-        fig2, ax2 = plt.subplots(figsize=(3, 2.3))
-        sns.barplot(x=fert_types, y=fert_values,
-                    palette=["#badc58", "#eb4d4b", "#22a6b3"], ax=ax2)
-        ax2.set_ylabel("Yield (hg/ha)", fontsize=8)
-        ax2.set_xlabel("Fertilizer Type", fontsize=8)
-        ax2.tick_params(axis="both", labelsize=8)
-        for i, val in enumerate(fert_values):
-            ax2.text(i, val + (val * 0.02), f"{val:,.0f}", ha="center", fontsize=8)
-        st.pyplot(fig2, use_container_width=True)
+wheat_smooth = savgol_filter(wheat_y, window_length=11, polyorder=3)
+maize_smooth = savgol_filter(maize_y, window_length=11, polyorder=3)
 
-    # Chart 3 — Yield vs Fertilizer
-    st.subheader("📈 Yield vs Fertilizer Quantity")
-    fert_range = range(100, 251, 10)
-    pred_range = []
-    for f in fert_range:
-        pred = model.predict(pd.DataFrame({
-            "population": [population],
-            "rainfall": [rainfall],
-            "temperature": [temperature],
-            "fertilizer": [f]
-        }))[0] * quality_factor * crop_yield_factors[crop_type] / 10
-        if rainfall < 50:
-            pred = 0
-        elif temperature < 5 or temperature > 40:
-            pred *= 0.3
-        pred_range.append(pred)
+fig2, ax2 = plt.subplots(figsize=(7, 4))
+ax2.plot(fert_range, wheat_smooth, label="Wheat (Smooth)", linewidth=2)
+ax2.plot(fert_range, maize_smooth, label="Maize (Smooth)", linewidth=2)
 
-    fig3, ax3 = plt.subplots(figsize=(4, 2.5))
-    ax3.plot(fert_range, pred_range, color="#0984e3", linewidth=2)
-    ax3.set_xlabel("Fertilizer (kg/ha)", fontsize=8)
-    ax3.set_ylabel("Predicted Yield (hg/ha)", fontsize=8)
-    ax3.tick_params(axis="both", labelsize=8)
-    ax3.grid(True, linestyle="--", alpha=0.4)
-    st.pyplot(fig3, use_container_width=True)
+ax2.set_xlabel("Fertilizer Amount (kg/ha)")
+ax2.set_ylabel("Predicted Yield (hg/ha)")
+ax2.set_title("Smooth Fertilizer Response Curve (Wheat vs Maize)")
+ax2.grid(True, linestyle="--", alpha=0.5)
+ax2.legend()
 
-    # --- Download results ---
-    result_df = pd.DataFrame({
-        "Crop Type": [crop_type],
-        "Population": [population],
-        "Rainfall (mm)": [rainfall],
-        "Temperature (°C)": [temperature],
-        "Fertilizer Type": [fertilizer_type],
-        "Fertilizer (kg/ha)": [fertilizer],
-        "Predicted Yield (hg/ha)": [pred_yield],
-        "Total Production (tons)": [total_production_tons],
-        "Total Demand (tons)": [total_demand_tons],
-        "Status": [status]
-    })
-    st.download_button("📥 Download Results", result_df.to_csv(index=False), file_name="crop_yield_results.csv")
-
-else:
-    st.info("👈 Adjust rainfall, temperature, fertilizer, crop type, and population — then click **Predict Crop Yield**.")
+st.pyplot(fig2)
