@@ -2,9 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 
-# ------------------------------------------------------------
 # PATHS
-# ------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROCESSED_DIR = os.path.join(BASE_DIR, "data", "processed")
 RAW_DIR = os.path.join(BASE_DIR, "data", "raw")
@@ -14,11 +12,9 @@ POP_PATH = os.path.join(RAW_DIR, "population_processed.csv")
 OUTPUT_PATH = os.path.join(PROCESSED_DIR, "canada_final_dataset.csv")
 
 
-# ------------------------------------------------------------
 # LOAD FAOSTAT CANADA CROP DATA
-# ------------------------------------------------------------
 def load_crop_data():
-    print("📥 Loading FAOSTAT Canada crop dataset...")
+    print(" Loading FAOSTAT Canada crop dataset...")
     df = pd.read_csv(FAOSTAT_PATH)
 
     # Clean column names
@@ -27,17 +23,16 @@ def load_crop_data():
     # Keep only wheat + maize
     df = df[df["crop"].isin(["wheat", "maize"])]
 
-    print("✔ Crops included:", df["crop"].unique())
-    print("✔ Rows after filtering:", df.shape)
+    print("Crops included:", df["crop"].unique())
+    print("Rows after filtering:", df.shape)
 
     return df
 
 
-# ------------------------------------------------------------
 # LOAD CANADA POPULATION FROM KAGGLE
-# ------------------------------------------------------------
+
 def load_population():
-    print("📥 Loading Kaggle population dataset...")
+    print(" Loading Kaggle population dataset...")
 
     df = pd.read_csv(POP_PATH)
     df.columns = df.columns.str.lower().str.replace(" ", "_")
@@ -65,9 +60,8 @@ def load_population():
     return melt_df
 
 
-# ------------------------------------------------------------
 # ADD REALISTIC ENVIRONMENTAL FEATURES
-# ------------------------------------------------------------
+
 def generate_realistic_environment(df):
     print("🌦 Adding realistic environmental simulation...")
 
@@ -96,11 +90,10 @@ def generate_realistic_environment(df):
     return df
 
 
-# ------------------------------------------------------------
 # RUN FULL PREPROCESSING PIPELINE
-# ------------------------------------------------------------
+
 def run_preprocessing():
-    print("🚀 Running preprocessing pipeline...\n")
+    print("Running preprocessing pipeline...\n")
 
     crop_df = load_crop_data()
     pop_df = load_population()
@@ -108,33 +101,26 @@ def run_preprocessing():
     # Merge crop yield + population by year
     merged = pd.merge(crop_df, pop_df, on="year", how="left")
 
-    # ------------------------------------------------------------
     # FIX MISSING POPULATION VALUES (NaN)
-    # ------------------------------------------------------------
     merged["population"] = merged["population"].interpolate(method="linear")  # smooth
     merged["population"] = merged["population"].fillna(method="bfill")         # backfill
     merged["population"] = merged["population"].fillna(method="ffill")         # forward fill
     merged["population"] = merged["population"].fillna(38_000_000)             # fallback
     merged["population"] = merged["population"].astype(int)
 
-    # ------------------------------------------------------------
     # ADD ENVIRONMENT FEATURES
-    # ------------------------------------------------------------
     merged = generate_realistic_environment(merged)
 
-    # ------------------------------------------------------------
     # SAVE FINAL DATASET
-    # ------------------------------------------------------------
     os.makedirs(PROCESSED_DIR, exist_ok=True)
     merged.to_csv(OUTPUT_PATH, index=False)
 
-    print("📊 Final dataset shape:", merged.shape)
-    print(f"✅ Saved final dataset to: {OUTPUT_PATH}")
+    print(" Final dataset shape:", merged.shape)
+    print(f" Saved final dataset to: {OUTPUT_PATH}")
 
 
-# ------------------------------------------------------------
 # MAIN
-# ------------------------------------------------------------
+
 if __name__ == "__main__":
     run_preprocessing()
 

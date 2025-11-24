@@ -17,9 +17,7 @@ model = CropYieldModel(model_path=MODEL_PATH)
 st.title("🇨🇦 Canada Crop Yield Prediction Dashboard")
 st.write("Predict yield for **Wheat** and **Maize (Corn)** using climate, fertilizer type, and population inputs.")
 
-# =================================================================
 # REALISTIC TEMPERATURE PENALTY
-# =================================================================
 def apply_temperature_penalty(temp, crop):
     if crop == "wheat":
         ideal_min, ideal_max = 15, 25
@@ -45,9 +43,8 @@ def apply_temperature_penalty(temp, crop):
     return 0.1
 
 
-# ---------------------------
 # Sidebar Inputs
-# ---------------------------
+
 st.sidebar.header("Input Settings")
 
 crop_type = st.sidebar.selectbox("Crop Type", ["wheat", "maize"])
@@ -81,9 +78,8 @@ area_ha = st.sidebar.number_input(
 
 predict_btn = st.sidebar.button("Predict Yield")
 
-# ---------------------------
 # Prediction
-# ---------------------------
+
 if predict_btn:
     pred = model.predict(
         crop=crop_type,
@@ -111,12 +107,11 @@ if predict_btn:
 
     pred = max(pred, 0)
 
-    st.subheader("📈 Predicted Yield")
+    st.subheader(" Predicted Yield")
     st.metric(f"{crop_type.upper()} Yield (hg/ha)", f"{pred:,.2f}")
 
-    # -----------------------------------------------------------
     # REALISTIC IMPORT/EXPORT CALCULATION
-    # -----------------------------------------------------------
+
     if crop_type == "wheat":
         need_per_person = 0.067  # tons per person per year
     else:
@@ -133,16 +128,15 @@ if predict_btn:
 
     difference = total_production - need_tons
 
-    st.write("### 🧮 National Balance Summary")
+    st.write("###  National Balance Summary")
     if difference >= 0:
-        st.success(f"✔ Canada can export approx. {difference:,.0f} tons.")
+        st.success(f" Canada can export approx. {difference:,.0f} tons.")
     else:
-        st.error(f"❌ Canada must import approx. {abs(difference):,.0f} tons.")
+        st.error(f" Canada must import approx. {abs(difference):,.0f} tons.")
 
-    # -----------------------------------------------------------
     # YEARLY TREND GRAPH
-    # -----------------------------------------------------------
-    st.subheader(f"📊 Yield Trend for {crop_type}")
+
+    st.subheader(f" Yield Trend for {crop_type}")
 
     crop_df = df[df["crop"] == crop_type]
 
@@ -154,10 +148,9 @@ if predict_btn:
     st.pyplot(fig)
 
 
-# =================================================================
 #  FERTILIZER RESPONSE CURVE
-# =================================================================
-st.subheader("🌾 Yield Response to Fertilizer (Smooth Curve)")
+
+st.subheader(" Yield Response to Fertilizer (Smooth Curve)")
 
 fert_range = np.arange(50, 251, 5)
 wheat_y = []

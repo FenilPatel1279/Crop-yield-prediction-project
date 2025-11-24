@@ -7,6 +7,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 
 DATA_PATH = "data/processed/canada_final_dataset.csv"
@@ -14,21 +15,21 @@ MODEL_PATH = "models/crop_yield_model.pkl"
 
 
 def train_model():
-    print("📥 Loading processed dataset...")
+    print(" Loading processed dataset...")
 
     df = pd.read_csv(DATA_PATH)
 
-    # ---- Required columns ----
+    # Required columns 
     required = ["year", "crop", "yield_hg_ha", "population", "rainfall", "temperature", "fertilizer"]
     for col in required:
         if col not in df.columns:
-            raise KeyError(f"❌ Missing column in dataset: {col}")
+            raise KeyError(f" Missing column in dataset: {col}")
 
-    # ---- Features + Target ----
+    # Features + Target 
     X = df[["crop", "population", "rainfall", "temperature", "fertilizer"]]
     y = df["yield_hg_ha"]
 
-    # ---- Encode crop ----
+    # Encode crop 
     preprocessor = ColumnTransformer(
         transformers=[
             ("crop_enc", OneHotEncoder(handle_unknown="ignore"), ["crop"])
@@ -36,7 +37,7 @@ def train_model():
         remainder="passthrough"
     )
 
-    # ---- RandomForest model ----
+    # RandomForest model
     model = RandomForestRegressor(
         n_estimators=200,
         max_depth=12,
@@ -53,17 +54,30 @@ def train_model():
         X, y, test_size=0.2, random_state=42
     )
 
-    print("🤖 Training RandomForest model...")
+    print("Training RandomForest model...")
     pipeline.fit(X_train, y_train)
 
+    # Model accuracy metrics
     score = pipeline.score(X_test, y_test)
-    print(f"✔ Training complete (R² = {score:.3f})")
+    y_pred = pipeline.predict(X_test)
 
-    # ---- Save model ----
+    mae = mean_absolute_error(y_test, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+    mse = mean_squared_error(y_test, y_pred)
+
+    print(f"\n Training complete (R² = {score:.3f})")
+    print("\n Model Evaluation Metrics ")
+    print(f"R² Score: {score:.4f}")
+    print(f"MAE (Mean Absolute Error): {mae:.2f}")
+    print(f"RMSE (Root Mean Squared Error): {rmse:.2f}")
+    print(f"MSE (Mean Squared Error): {mse:.2f}")
+    print("\n")
+
+    # Save model
     os.makedirs("models", exist_ok=True)
     joblib.dump(pipeline, MODEL_PATH)
 
-    print(f"💾 Model saved to: {MODEL_PATH}")
+    print(f" Model saved to: {MODEL_PATH}")
 
 
 if __name__ == "__main__":
