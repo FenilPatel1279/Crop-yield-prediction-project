@@ -55,7 +55,11 @@ def load_population():
 
     melt_df = melt_df[["year", "population"]].drop_duplicates()
 
+<<<<<<< HEAD
     print(" Loaded population rows:", melt_df.shape)
+=======
+    print("✔ Loaded population rows:", melt_df.shape)
+>>>>>>> d26e9788998ca4b6ef6641cf450c19eac2d3947f
 
     return melt_df
 

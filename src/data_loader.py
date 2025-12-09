@@ -5,7 +5,11 @@ def fetch_crop_yield_data(country: str, item: str, years: list):
     """
     Fetch data from FAOSTAT for a given crop (item) in a country, across years.
     """
+<<<<<<< HEAD
     dataset_code = 'QCL' 
+=======
+    dataset_code = 'QCL'  # Crops & livestock products domain :contentReference[oaicite:4]{index=4}
+>>>>>>> d26e9788998ca4b6ef6641cf450c19eac2d3947f
     # Get parameter codes
     items = faostat.get_par(dataset_code, 'item')
     # find item code for `item`
