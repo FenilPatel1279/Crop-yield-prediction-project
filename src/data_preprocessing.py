@@ -2,22 +2,28 @@ import pandas as pd
 import numpy as np
 import os
 
+# ---------------------------------------------------
 # PATHS
+# ---------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROCESSED_DIR = os.path.join(BASE_DIR, "data", "processed")
 RAW_DIR = os.path.join(BASE_DIR, "data", "raw")
 
 FAOSTAT_PATH = os.path.join(PROCESSED_DIR, "canada_crop_yield.csv")
-POP_PATH = os.path.join(RAW_DIR, "population_processed.csv")
+
+# NEW population file
+POP_PATH = os.path.join(PROCESSED_DIR, "canada_population_yearly.csv")
+
 OUTPUT_PATH = os.path.join(PROCESSED_DIR, "canada_final_dataset.csv")
 
 
-# LOAD FAOSTAT CANADA CROP DATA
+# ---------------------------------------------------
+# LOAD CANADA CROP DATA
+# ---------------------------------------------------
 def load_crop_data():
     print(" Loading FAOSTAT Canada crop dataset...")
     df = pd.read_csv(FAOSTAT_PATH)
 
-    # Clean column names
     df.columns = df.columns.str.lower().str.strip()
 
     # Keep only wheat + maize
@@ -29,41 +35,29 @@ def load_crop_data():
     return df
 
 
-# LOAD CANADA POPULATION FROM KAGGLE
-
+# ---------------------------------------------------
+# LOAD THE CLEANED YEARLY CANADA POPULATION DATA
+# ---------------------------------------------------
 def load_population():
-    print(" Loading Kaggle population dataset...")
+    print(" Loading cleaned yearly Canada population dataset...")
 
     df = pd.read_csv(POP_PATH)
-    df.columns = df.columns.str.lower().str.replace(" ", "_")
+    df.columns = df.columns.str.lower().str.strip()
 
-    # Canada-only
-    df = df[df["country/territory"].str.lower() == "canada"]
+    # Ensure correct format → year & population
+    if not {"year", "population"}.issubset(df.columns):
+        raise KeyError("❌ canada_population_yearly.csv must have columns: year, population")
 
-    # Identify year columns (e.g., '2020_population')
-    pop_cols = [c for c in df.columns if c.endswith("population")]
+    print(" Loaded population rows:", df.shape)
 
-    # Convert from wide → long format
-    melt_df = df.melt(
-        value_vars=pop_cols,
-        var_name="year_raw",
-        value_name="population"
-    )
-
-    # Extract the year number from the column name
-    melt_df["year"] = melt_df["year_raw"].str.extract(r"(\d{4})").astype(int)
-
-    melt_df = melt_df[["year", "population"]].drop_duplicates()
-
-    print("✔ Loaded population rows:", melt_df.shape)
-
-    return melt_df
+    return df
 
 
+# ---------------------------------------------------
 # ADD REALISTIC ENVIRONMENTAL FEATURES
-
+# ---------------------------------------------------
 def generate_realistic_environment(df):
-    print("🌦 Adding realistic environmental simulation...")
+    print(" Adding realistic environmental simulation...")
 
     np.random.seed(42)
 
@@ -82,7 +76,6 @@ def generate_realistic_environment(df):
             temperature.append(np.random.normal(22, 4))
             fertilizer.append(np.random.normal(190, 30))
 
-    # Clip to realistic physical ranges
     df["rainfall"] = np.clip(rainfall, 200, 1200)
     df["temperature"] = np.clip(temperature, 5, 35)
     df["fertilizer"] = np.clip(fertilizer, 80, 250)
@@ -90,8 +83,9 @@ def generate_realistic_environment(df):
     return df
 
 
-# RUN FULL PREPROCESSING PIPELINE
-
+# ---------------------------------------------------
+# MAIN PREPROCESSING PIPELINE
+# ---------------------------------------------------
 def run_preprocessing():
     print("Running preprocessing pipeline...\n")
 
@@ -101,17 +95,15 @@ def run_preprocessing():
     # Merge crop yield + population by year
     merged = pd.merge(crop_df, pop_df, on="year", how="left")
 
-    # FIX MISSING POPULATION VALUES (NaN)
-    merged["population"] = merged["population"].interpolate(method="linear")  # smooth
-    merged["population"] = merged["population"].fillna(method="bfill")         # backfill
-    merged["population"] = merged["population"].fillna(method="ffill")         # forward fill
-    merged["population"] = merged["population"].fillna(38_000_000)             # fallback
+    # Fix missing population values
+    merged["population"] = merged["population"].interpolate()
+    merged["population"] = merged["population"].bfill().ffill()
     merged["population"] = merged["population"].astype(int)
 
-    # ADD ENVIRONMENT FEATURES
+    # Add simulated environment values
     merged = generate_realistic_environment(merged)
 
-    # SAVE FINAL DATASET
+    # Save output
     os.makedirs(PROCESSED_DIR, exist_ok=True)
     merged.to_csv(OUTPUT_PATH, index=False)
 
@@ -119,8 +111,8 @@ def run_preprocessing():
     print(f" Saved final dataset to: {OUTPUT_PATH}")
 
 
-# MAIN
-
+# ---------------------------------------------------
+# ENTRY POINT
+# ---------------------------------------------------
 if __name__ == "__main__":
     run_preprocessing()
-
