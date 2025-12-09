@@ -2,11 +2,7 @@ import os
 import pandas as pd
 
 def download_population_data():
-<<<<<<< HEAD
-  
-=======
     # Example: assume you manually download CSV from Kaggle and place in raw/
->>>>>>> d26e9788998ca4b6ef6641cf450c19eac2d3947f
     print("Please download population dataset from Kaggle (e.g. 'World Population Dataset') and place as data/raw/world_population.csv")
 
 def download_crop_yield_data():
