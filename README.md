@@ -154,6 +154,8 @@ Install dependencies:
 
 pip install -r requirements.txt
 
+**To see the Dashboard**
+streamlit run streamitapp.py 
 
 If you want XGBoost:
 
