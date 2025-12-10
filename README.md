@@ -1,7 +1,7 @@
 .
-
-🌾 Crop Yield Prediction – README
-📌 Overview
+**
+🌾 Crop Yield Prediction
+📌 Overview**
 
 This project predicts crop yield (hg/ha) for Canada using machine learning.
 The prediction is based on:
@@ -18,8 +18,8 @@ Fertilizer usage
 
 The project includes data preprocessing, model training, saving trained models, and a dashboard for user prediction.
 
-📁 Project Structure
-
+**📁 Project Structure
+**
 Your project folder looks like this:
 
 CROP_YIELD_PREDICTION/
@@ -58,7 +58,7 @@ CROP_YIELD_PREDICTION/
 ├── requirements.txt
 └── README.md
 
-🔧 What Each File Does
+**🔧 What Each File Does**
 data/
 
 Contains raw and cleaned datasets used for training.
@@ -91,7 +91,7 @@ templates/
 
 HTML templates for Flask UI.
 
-▶️ How to Train Models
+**▶️ How to Train Models**
 
 Run this command:
 
@@ -110,7 +110,7 @@ Print model performance
 
 Save all models inside the models/ folder
 
-📊 Model Metrics
+**📊 Model Metrics**
 
 Each model prints:
 
@@ -124,7 +124,7 @@ MSE
 
 This helps compare performance.
 
-🤖 How to Make a Prediction
+**🤖 How to Make a Prediction**
 
 Example using model.py:
 
@@ -143,15 +143,10 @@ prediction = model.predict(
 print(prediction)
 
 🖥 Running the Dashboard
-python src/dashboard_app.py
-
-
-Open in browser:
-
-http://127.0.0.1:5000
-
+**python src/dashboard_app.py
+**
 Streamlit App
-streamlit run streamlitapp.py
+**streamlit run streamlitapp.py**
 
 📦 Install Requirements
 
@@ -164,8 +159,8 @@ If you want XGBoost:
 
 pip install xgboost
 
-⭐ Summary
-
+**⭐ Summary
+**
 This project predicts crop yield using ML models.
 
 Includes full data preprocessing, training, and evaluation.
